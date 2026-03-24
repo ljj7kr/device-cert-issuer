@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: device-cert-issuer-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: device_cert_issuer
+      MYSQL_USER: device_issuer
+      MYSQL_PASSWORD: device_issuer_password
+      MYSQL_ROOT_PASSWORD: root_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  mysql-migrate:
+    image: mysql:8.4
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - ./db/migration:/migrations:ro
+    command:
+      - sh
+      - -c
+      - >
+        mysql
+        -h mysql
+        -u device_issuer
+        -pdevice_issuer_password
+        device_cert_issuer
+        < /migrations/000001_create_device_certificates.up.sql
+
+volumes:
+  mysql-data:

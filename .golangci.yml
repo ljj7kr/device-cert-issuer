@@ -1,0 +1,25 @@
+version: "2"
+
+run:
+  timeout: 3m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - contextcheck
+    - durationcheck
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - unconvert
+    - unparam
+
+issues:
+  exclude-use-default: false
