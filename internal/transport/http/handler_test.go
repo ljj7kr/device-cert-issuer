@@ -22,6 +22,15 @@ func (s *issueServiceStub) Issue(context.Context, domain.IssueRequest, string) (
 	return s.issued, s.err
 }
 
+type issueServerServiceStub struct {
+	issued *domain.IssuedServerCertificate
+	err    error
+}
+
+func (s *issueServerServiceStub) Issue(context.Context, domain.IssueServerCertificateRequest, string) (*domain.IssuedServerCertificate, error) {
+	return s.issued, s.err
+}
+
 type readinessServiceStub struct {
 	status *domain.ReadinessStatus
 	err    error
@@ -43,6 +52,7 @@ func TestHandler_인증서를_발급한다(t *testing.T) {
 					NotAfter:             time.Unix(3600, 0).UTC(),
 				},
 			},
+			&issueServerServiceStub{},
 			&readinessServiceStub{status: &domain.ReadinessStatus{Status: "ready"}},
 		),
 		4096,
@@ -72,6 +82,7 @@ func TestHandler_레디니스_실패를_반환한다(t *testing.T) {
 	handler := httptransport.NewHTTPHandler(
 		httptransport.NewHandler(
 			&issueServiceStub{},
+			&issueServerServiceStub{},
 			&readinessServiceStub{err: domain.NewAppError("internal_error", "database is not ready", domain.ErrNotReady, nil)},
 		),
 		4096,
@@ -91,6 +102,7 @@ func TestHandler_Swagger_UI를_제공한다(t *testing.T) {
 	handler := httptransport.NewHTTPHandler(
 		httptransport.NewHandler(
 			&issueServiceStub{},
+			&issueServerServiceStub{},
 			&readinessServiceStub{status: &domain.ReadinessStatus{Status: "ready"}},
 		),
 		4096,
@@ -106,5 +118,46 @@ func TestHandler_Swagger_UI를_제공한다(t *testing.T) {
 	}
 	if !bytes.Contains(rec.Body.Bytes(), []byte("SwaggerUIBundle")) {
 		t.Fatalf("expected swagger ui body, got %s", rec.Body.String())
+	}
+}
+
+func TestHandler_Server_인증서를_발급한다(t *testing.T) {
+	handler := httptransport.NewHTTPHandler(
+		httptransport.NewHandler(
+			&issueServiceStub{},
+			&issueServerServiceStub{
+				issued: &domain.IssuedServerCertificate{
+					CertificatePEM: "server-cert",
+					ChainPEM:       "chain",
+					FullChainPEM:   "server-certchain",
+					SerialNumber:   "2B",
+					NotBefore:      time.Unix(0, 0).UTC(),
+					NotAfter:       time.Unix(7200, 0).UTC(),
+					SubjectSummary: "CN=gateway.local",
+					SANSummary:     "DNS:gateway.local",
+				},
+			},
+			&readinessServiceStub{status: &domain.ReadinessStatus{Status: "ready"}},
+		),
+		4096,
+	)
+
+	body, err := json.Marshal(map[string]any{
+		"csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\nabc\n-----END CERTIFICATE REQUEST-----",
+	})
+	if err != nil {
+		t.Fatalf("Marshal returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/server-certificates:issue", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("fullchain_pem")) {
+		t.Fatalf("expected server issuance body, got %s", rec.Body.String())
 	}
 }

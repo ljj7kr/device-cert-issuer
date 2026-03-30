@@ -22,6 +22,7 @@ type CSRIdentity struct {
 	SANSummary     string
 	CommonName     string
 	DNSNames       []string
+	IPAddresses    []string
 	URIs           []string
 }
 
@@ -41,4 +42,22 @@ type IssuedCertificate struct {
 	SANSummary           string
 	Profile              string
 	IssuanceStatus       string
+}
+
+type IssueServerCertificateRequest struct {
+	CSRPEM string
+}
+
+type IssuedServerCertificate struct {
+	CertificatePEM    string
+	ChainPEM          string
+	FullChainPEM      string
+	SerialNumber      string
+	NotBefore         time.Time
+	NotAfter          time.Time
+	SubjectSummary    string
+	SANSummary        string
+	FingerprintSHA256 string
+	Profile           string
+	IssuanceStatus    string
 }

@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
@@ -86,35 +87,40 @@ func (v *CSRValidator) Validate(req domain.IssueRequest, enrollment *domain.Enro
 		PublicKey: csr.PublicKey,
 		Identity: domain.CSRIdentity{
 			SubjectSummary: csr.Subject.String(),
-			SANSummary:     buildSANSummary(csr.DNSNames, csr.URIs),
+			SANSummary:     buildSANSummary(csr.DNSNames, csr.IPAddresses, csr.URIs),
 			CommonName:     csr.Subject.CommonName,
 			DNSNames:       csr.DNSNames,
+			IPAddresses:    stringifyIPAddresses(csr.IPAddresses),
 			URIs:           stringifyURIs(csr.URIs),
 		},
 	}, nil
 }
 
 func (v *CSRValidator) validateKey(publicKey any) error {
+	return validatePublicKeyPolicy(publicKey, v.allowedKeyAlgorithms, v.allowedCurves, v.allowedRSABits)
+}
+
+func validatePublicKeyPolicy(publicKey any, allowedKeyAlgorithms map[string]struct{}, allowedCurves map[string]struct{}, allowedRSABits map[int]struct{}) error {
 	switch key := publicKey.(type) {
 	case *rsa.PublicKey:
-		if _, ok := v.allowedKeyAlgorithms["RSA"]; !ok {
+		if _, ok := allowedKeyAlgorithms["RSA"]; !ok {
 			return domain.NewAppError("policy_violation", "RSA keys are not allowed", domain.ErrPolicyViolation, nil)
 		}
-		if _, ok := v.allowedRSABits[key.Size()*8]; !ok {
+		if _, ok := allowedRSABits[key.Size()*8]; !ok {
 			return domain.NewAppError("policy_violation", "RSA key size is not allowed", domain.ErrPolicyViolation, nil)
 		}
 	case *ecdsa.PublicKey:
-		if _, ok := v.allowedKeyAlgorithms["ECDSA"]; !ok {
+		if _, ok := allowedKeyAlgorithms["ECDSA"]; !ok {
 			return domain.NewAppError("policy_violation", "ECDSA keys are not allowed", domain.ErrPolicyViolation, nil)
 		}
-		if _, ok := v.allowedCurves[normalizeCurveName(key.Curve.Params().Name)]; !ok {
+		if _, ok := allowedCurves[normalizeCurveName(key.Curve.Params().Name)]; !ok {
 			return domain.NewAppError("policy_violation", "ECDSA curve is not allowed", domain.ErrPolicyViolation, nil)
 		}
 	case ed25519.PublicKey:
-		if _, ok := v.allowedKeyAlgorithms["ED25519"]; !ok {
+		if _, ok := allowedKeyAlgorithms["ED25519"]; !ok {
 			return domain.NewAppError("policy_violation", "Ed25519 keys are not allowed", domain.ErrPolicyViolation, nil)
 		}
-		if _, ok := v.allowedCurves["ED25519"]; !ok {
+		if _, ok := allowedCurves["ED25519"]; !ok {
 			return domain.NewAppError("policy_violation", "Ed25519 is not allowed", domain.ErrPolicyViolation, nil)
 		}
 	default:
@@ -150,17 +156,30 @@ func validateSubjectAndSAN(req domain.IssueRequest, enrollment *domain.Enrollmen
 	return nil
 }
 
-func buildSANSummary(dnsNames []string, uris []*url.URL) string {
+func buildSANSummary(dnsNames []string, ipAddresses []net.IP, uris []*url.URL) string {
 	uriValues := stringifyURIs(uris)
-	parts := make([]string, 0, len(dnsNames)+len(uriValues))
+	ipValues := stringifyIPAddresses(ipAddresses)
+	parts := make([]string, 0, len(dnsNames)+len(uriValues)+len(ipValues))
 	for _, dnsName := range dnsNames {
 		parts = append(parts, "DNS:"+dnsName)
+	}
+	for _, ipValue := range ipValues {
+		parts = append(parts, "IP:"+ipValue)
 	}
 	for _, uriValue := range uriValues {
 		parts = append(parts, "URI:"+uriValue)
 	}
 
 	return strings.Join(parts, ",")
+}
+
+func stringifyIPAddresses(ipAddresses []net.IP) []string {
+	result := make([]string, 0, len(ipAddresses))
+	for _, ipAddress := range ipAddresses {
+		result = append(result, ipAddress.String())
+	}
+
+	return result
 }
 
 func stringifyURIs(uris []*url.URL) []string {

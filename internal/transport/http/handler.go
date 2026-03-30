@@ -21,19 +21,25 @@ type IssueService interface {
 	Issue(ctx context.Context, req domain.IssueRequest, requestID string) (*domain.IssuedCertificate, error)
 }
 
+type IssueServerService interface {
+	Issue(ctx context.Context, req domain.IssueServerCertificateRequest, requestID string) (*domain.IssuedServerCertificate, error)
+}
+
 type ReadinessService interface {
 	Check(ctx context.Context) (*domain.ReadinessStatus, error)
 }
 
 type Handler struct {
-	issueService     IssueService
-	readinessService ReadinessService
+	issueService       IssueService
+	serverIssueService IssueServerService
+	readinessService   ReadinessService
 }
 
-func NewHandler(issueService IssueService, readinessService ReadinessService) *Handler {
+func NewHandler(issueService IssueService, serverIssueService IssueServerService, readinessService ReadinessService) *Handler {
 	return &Handler{
-		issueService:     issueService,
-		readinessService: readinessService,
+		issueService:       issueService,
+		serverIssueService: serverIssueService,
+		readinessService:   readinessService,
 	}
 }
 
@@ -94,6 +100,44 @@ func (h *Handler) PostApiV1DeviceCertificatesIssue(ctx context.Context, request 
 		SerialNumber:         issued.SerialNumber,
 		NotBefore:            issued.NotBefore,
 		NotAfter:             issued.NotAfter,
+	}, nil
+}
+
+func (h *Handler) PostApiV1ServerCertificatesIssue(ctx context.Context, request openapi.PostApiV1ServerCertificatesIssueRequestObject) (openapi.PostApiV1ServerCertificatesIssueResponseObject, error) {
+	if request.Body == nil {
+		return openapi.PostApiV1ServerCertificatesIssue400JSONResponse{
+			Code:    "invalid_request",
+			Message: "request body is required",
+		}, nil
+	}
+
+	requestID := RequestIDFromContext(ctx)
+	issued, err := h.serverIssueService.Issue(ctx, domain.IssueServerCertificateRequest{
+		CSRPEM: strings.TrimSpace(request.Body.CsrPem),
+	}, requestID)
+	if err != nil {
+		errorResponse := toErrorResponse(err, requestID)
+		switch errorResponse.Code {
+		case "invalid_request", "invalid_csr":
+			return openapi.PostApiV1ServerCertificatesIssue400JSONResponse(errorResponse), nil
+		case "policy_violation", "unauthorized_device":
+			return openapi.PostApiV1ServerCertificatesIssue403JSONResponse(errorResponse), nil
+		case "signer_unavailable":
+			return openapi.PostApiV1ServerCertificatesIssue503JSONResponse(errorResponse), nil
+		default:
+			return openapi.PostApiV1ServerCertificatesIssue500JSONResponse(errorResponse), nil
+		}
+	}
+
+	return openapi.PostApiV1ServerCertificatesIssue200JSONResponse{
+		CertificatePem: issued.CertificatePEM,
+		ChainPem:       issued.ChainPEM,
+		FullchainPem:   issued.FullChainPEM,
+		SerialNumber:   issued.SerialNumber,
+		NotBefore:      issued.NotBefore,
+		NotAfter:       issued.NotAfter,
+		SubjectSummary: &issued.SubjectSummary,
+		SanSummary:     &issued.SANSummary,
 	}, nil
 }
 

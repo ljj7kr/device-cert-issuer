@@ -46,18 +46,19 @@ type SignerConfig struct {
 }
 
 type IssuanceConfig struct {
-	Validity          time.Duration
-	AllowedKeyAlgos   []string
-	AllowedCurves     []string
-	AllowedRSABits    []int
-	DefaultProfile    string
-	AllowedProfiles   []string
-	SubjectOrg        string
-	SubjectOrgUnit    string
-	SubjectCountry    string
-	SubjectProvince   string
-	SubjectLocality   string
-	SubjectCommonName string
+	Validity           time.Duration
+	ServerCertValidity time.Duration
+	AllowedKeyAlgos    []string
+	AllowedCurves      []string
+	AllowedRSABits     []int
+	DefaultProfile     string
+	AllowedProfiles    []string
+	SubjectOrg         string
+	SubjectOrgUnit     string
+	SubjectCountry     string
+	SubjectProvince    string
+	SubjectLocality    string
+	SubjectCommonName  string
 }
 
 type LogConfig struct {
@@ -80,6 +81,7 @@ type rawConfig struct {
 	IntermediateChainPath    string        `env:"INTERMEDIATE_CHAIN_PATH"`
 	SignerStrictFilePerms    bool          `env:"SIGNER_STRICT_FILE_PERMS" envDefault:"true"`
 	CertValidity             time.Duration `env:"CERT_VALIDITY" envDefault:"720h"`
+	ServerCertValidity       time.Duration `env:"SERVER_CERT_VALIDITY" envDefault:"720h"`
 	AllowedKeyAlgorithms     string        `env:"ALLOWED_KEY_ALGORITHMS" envDefault:"RSA,ECDSA,Ed25519"`
 	AllowedCurves            string        `env:"ALLOWED_CURVES" envDefault:"P256,P384,Ed25519"`
 	AllowedRSABits           string        `env:"ALLOWED_RSA_BITS" envDefault:"2048,3072,4096"`
@@ -127,18 +129,19 @@ func Load() (Config, error) {
 			RequirePrivateKeyStrict: raw.SignerStrictFilePerms,
 		},
 		Issuance: IssuanceConfig{
-			Validity:          raw.CertValidity,
-			AllowedKeyAlgos:   parseStringList(raw.AllowedKeyAlgorithms),
-			AllowedCurves:     parseStringList(raw.AllowedCurves),
-			AllowedRSABits:    allowedRSABits,
-			DefaultProfile:    normalizeProfile(raw.DefaultProfile),
-			AllowedProfiles:   parseStringList(raw.AllowedProfiles),
-			SubjectOrg:        normalizeEnvString(raw.IssuerOrganization),
-			SubjectOrgUnit:    normalizeEnvString(raw.IssuerOrganizationalUnit),
-			SubjectCountry:    normalizeEnvString(raw.IssuerCountry),
-			SubjectProvince:   normalizeEnvString(raw.IssuerProvince),
-			SubjectLocality:   normalizeEnvString(raw.IssuerLocality),
-			SubjectCommonName: normalizeEnvString(raw.IssuerCommonName),
+			Validity:           raw.CertValidity,
+			ServerCertValidity: raw.ServerCertValidity,
+			AllowedKeyAlgos:    parseStringList(raw.AllowedKeyAlgorithms),
+			AllowedCurves:      parseStringList(raw.AllowedCurves),
+			AllowedRSABits:     allowedRSABits,
+			DefaultProfile:     normalizeProfile(raw.DefaultProfile),
+			AllowedProfiles:    parseStringList(raw.AllowedProfiles),
+			SubjectOrg:         normalizeEnvString(raw.IssuerOrganization),
+			SubjectOrgUnit:     normalizeEnvString(raw.IssuerOrganizationalUnit),
+			SubjectCountry:     normalizeEnvString(raw.IssuerCountry),
+			SubjectProvince:    normalizeEnvString(raw.IssuerProvince),
+			SubjectLocality:    normalizeEnvString(raw.IssuerLocality),
+			SubjectCommonName:  normalizeEnvString(raw.IssuerCommonName),
 		},
 		Log: LogConfig{
 			Level: normalizeEnvString(raw.LogLevel),

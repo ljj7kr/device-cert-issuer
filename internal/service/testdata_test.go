@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"net/url"
 	"testing"
 	"time"
@@ -78,6 +79,48 @@ func newSignerMaterial(t *testing.T) (*x509.Certificate, *rsa.PrivateKey, string
 
 	return cert, key, string(pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE",
+		Bytes: der,
+	}))
+}
+
+func newServerCSR(t *testing.T, commonName string, dnsNames []string, ipAddresses []string, uriValues []string) string {
+	t.Helper()
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("GenerateKey returned error: %v", err)
+	}
+
+	uris := make([]*url.URL, 0, len(uriValues))
+	for _, uriValue := range uriValues {
+		parsedURI, parseErr := url.Parse(uriValue)
+		if parseErr != nil {
+			t.Fatalf("Parse returned error: %v", parseErr)
+		}
+		uris = append(uris, parsedURI)
+	}
+
+	ips := make([]net.IP, 0, len(ipAddresses))
+	for _, ipAddress := range ipAddresses {
+		ips = append(ips, net.ParseIP(ipAddress))
+	}
+
+	template := &x509.CertificateRequest{
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		DNSNames:    dnsNames,
+		IPAddresses: ips,
+		URIs:        uris,
+	}
+
+	der, err := x509.CreateCertificateRequest(rand.Reader, template, key)
+	if err != nil {
+		t.Fatalf("CreateCertificateRequest returned error: %v", err)
+	}
+
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE REQUEST",
 		Bytes: der,
 	}))
 }

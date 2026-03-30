@@ -58,6 +58,23 @@ type IssueDeviceCertificateResponse struct {
 	SerialNumber         string    `json:"serial_number"`
 }
 
+// IssueServerCertificateRequest defines model for IssueServerCertificateRequest.
+type IssueServerCertificateRequest struct {
+	CsrPem string `json:"csr_pem"`
+}
+
+// IssueServerCertificateResponse defines model for IssueServerCertificateResponse.
+type IssueServerCertificateResponse struct {
+	CertificatePem string    `json:"certificate_pem"`
+	ChainPem       string    `json:"chain_pem"`
+	FullchainPem   string    `json:"fullchain_pem"`
+	NotAfter       time.Time `json:"not_after"`
+	NotBefore      time.Time `json:"not_before"`
+	SanSummary     *string   `json:"san_summary,omitempty"`
+	SerialNumber   string    `json:"serial_number"`
+	SubjectSummary *string   `json:"subject_summary,omitempty"`
+}
+
 // ReadinessResponse defines model for ReadinessResponse.
 type ReadinessResponse struct {
 	Status string `json:"status"`
@@ -65,6 +82,9 @@ type ReadinessResponse struct {
 
 // PostApiV1DeviceCertificatesIssueJSONRequestBody defines body for PostApiV1DeviceCertificatesIssue for application/json ContentType.
 type PostApiV1DeviceCertificatesIssueJSONRequestBody = IssueDeviceCertificateRequest
+
+// PostApiV1ServerCertificatesIssueJSONRequestBody defines body for PostApiV1ServerCertificatesIssue for application/json ContentType.
+type PostApiV1ServerCertificatesIssueJSONRequestBody = IssueServerCertificateRequest
 
 // AsErrorResponseDetails0 returns the union data inside the ErrorResponse_Details as a ErrorResponseDetails0
 func (t ErrorResponse_Details) AsErrorResponseDetails0() (ErrorResponseDetails0, error) {
@@ -133,6 +153,9 @@ type ServerInterface interface {
 	// Issue a device certificate from a CSR
 	// (POST /api/v1/device-certificates:issue)
 	PostApiV1DeviceCertificatesIssue(w http.ResponseWriter, r *http.Request)
+	// Issue a server certificate from a CSR
+	// (POST /api/v1/server-certificates:issue)
+	PostApiV1ServerCertificatesIssue(w http.ResponseWriter, r *http.Request)
 	// Liveness probe
 	// (GET /healthz)
 	GetHealthz(w http.ResponseWriter, r *http.Request)
@@ -155,6 +178,20 @@ func (siw *ServerInterfaceWrapper) PostApiV1DeviceCertificatesIssue(w http.Respo
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PostApiV1DeviceCertificatesIssue(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostApiV1ServerCertificatesIssue operation middleware
+func (siw *ServerInterfaceWrapper) PostApiV1ServerCertificatesIssue(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostApiV1ServerCertificatesIssue(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -313,6 +350,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc("POST "+options.BaseURL+"/api/v1/device-certificates:issue", wrapper.PostApiV1DeviceCertificatesIssue)
+	m.HandleFunc("POST "+options.BaseURL+"/api/v1/server-certificates:issue", wrapper.PostApiV1ServerCertificatesIssue)
 	m.HandleFunc("GET "+options.BaseURL+"/healthz", wrapper.GetHealthz)
 	m.HandleFunc("GET "+options.BaseURL+"/readyz", wrapper.GetReadyz)
 
@@ -372,6 +410,59 @@ func (response PostApiV1DeviceCertificatesIssue503JSONResponse) VisitPostApiV1De
 	return json.NewEncoder(w).Encode(response)
 }
 
+type PostApiV1ServerCertificatesIssueRequestObject struct {
+	Body *PostApiV1ServerCertificatesIssueJSONRequestBody
+}
+
+type PostApiV1ServerCertificatesIssueResponseObject interface {
+	VisitPostApiV1ServerCertificatesIssueResponse(w http.ResponseWriter) error
+}
+
+type PostApiV1ServerCertificatesIssue200JSONResponse IssueServerCertificateResponse
+
+func (response PostApiV1ServerCertificatesIssue200JSONResponse) VisitPostApiV1ServerCertificatesIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PostApiV1ServerCertificatesIssue400JSONResponse ErrorResponse
+
+func (response PostApiV1ServerCertificatesIssue400JSONResponse) VisitPostApiV1ServerCertificatesIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PostApiV1ServerCertificatesIssue403JSONResponse ErrorResponse
+
+func (response PostApiV1ServerCertificatesIssue403JSONResponse) VisitPostApiV1ServerCertificatesIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PostApiV1ServerCertificatesIssue500JSONResponse ErrorResponse
+
+func (response PostApiV1ServerCertificatesIssue500JSONResponse) VisitPostApiV1ServerCertificatesIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type PostApiV1ServerCertificatesIssue503JSONResponse ErrorResponse
+
+func (response PostApiV1ServerCertificatesIssue503JSONResponse) VisitPostApiV1ServerCertificatesIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type GetHealthzRequestObject struct {
 }
 
@@ -418,6 +509,9 @@ type StrictServerInterface interface {
 	// Issue a device certificate from a CSR
 	// (POST /api/v1/device-certificates:issue)
 	PostApiV1DeviceCertificatesIssue(ctx context.Context, request PostApiV1DeviceCertificatesIssueRequestObject) (PostApiV1DeviceCertificatesIssueResponseObject, error)
+	// Issue a server certificate from a CSR
+	// (POST /api/v1/server-certificates:issue)
+	PostApiV1ServerCertificatesIssue(ctx context.Context, request PostApiV1ServerCertificatesIssueRequestObject) (PostApiV1ServerCertificatesIssueResponseObject, error)
 	// Liveness probe
 	// (GET /healthz)
 	GetHealthz(ctx context.Context, request GetHealthzRequestObject) (GetHealthzResponseObject, error)
@@ -479,6 +573,37 @@ func (sh *strictHandler) PostApiV1DeviceCertificatesIssue(w http.ResponseWriter,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PostApiV1DeviceCertificatesIssueResponseObject); ok {
 		if err := validResponse.VisitPostApiV1DeviceCertificatesIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostApiV1ServerCertificatesIssue operation middleware
+func (sh *strictHandler) PostApiV1ServerCertificatesIssue(w http.ResponseWriter, r *http.Request) {
+	var request PostApiV1ServerCertificatesIssueRequestObject
+
+	var body PostApiV1ServerCertificatesIssueJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostApiV1ServerCertificatesIssue(ctx, request.(PostApiV1ServerCertificatesIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostApiV1ServerCertificatesIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostApiV1ServerCertificatesIssueResponseObject); ok {
+		if err := validResponse.VisitPostApiV1ServerCertificatesIssueResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

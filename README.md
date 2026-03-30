@@ -1,7 +1,7 @@
 # device-cert-issuer
 
 `device-cert-issuer` 는 온라인 device certificate issuance service 다  
-이 서비스는 device 가 생성한 CSR 을 검증하고, 이미 발급된 Intermediate CA 인증서와 signing capability 를 사용해 mTLS 용 device certificate 를 발급한다
+이 서비스는 device 와 server 가 생성한 CSR 을 검증하고, 이미 발급된 Intermediate CA 인증서와 signing capability 를 사용해 mTLS 용 leaf certificate 를 발급한다
 
 ## 아키텍처 개요
 
@@ -81,7 +81,7 @@
 
 ## OpenAPI 예시
 
-요청
+Device certificate issuance 요청
 
 ```json
 {
@@ -93,8 +93,6 @@
 }
 ```
 
-응답
-
 ```json
 {
   "device_certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
@@ -102,6 +100,29 @@
   "serial_number": "7F1A...",
   "not_before": "2026-03-20T00:00:00Z",
   "not_after": "2026-04-19T00:00:00Z"
+}
+```
+
+Server certificate issuance 요청
+
+```json
+{
+  "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----"
+}
+```
+
+Server certificate issuance 응답
+
+```json
+{
+  "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+  "chain_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+  "fullchain_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+  "serial_number": "8A12...",
+  "not_before": "2026-03-27T00:00:00Z",
+  "not_after": "2027-03-27T00:00:00Z",
+  "subject_summary": "CN=gateway.local,O=Device PKI,OU=Device Certificates,C=KR,ST=Seoul,L=Seoul",
+  "san_summary": "DNS:gateway.local,IP:10.0.0.10"
 }
 ```
 
@@ -125,6 +146,7 @@
 - `SIGNER_MODE`
 - `INTERMEDIATE_CHAIN_PATH`
 - `CERT_VALIDITY`
+- `SERVER_CERT_VALIDITY`
 - `ALLOWED_KEY_ALGORITHMS`
 - `ALLOWED_CURVES`
 - `ALLOWED_RSA_BITS`
@@ -180,6 +202,33 @@ make run
 
 Swagger UI 는 `http://localhost:8080/swagger` 에서 확인할 수 있다  
 raw OpenAPI spec 는 `http://localhost:8080/openapi.yaml` 로 노출된다
+
+## Server CSR Signing
+
+server certificate endpoint
+
+```text
+POST /api/v1/server-certificates:issue
+```
+
+이 endpoint 는 gateway 나 server 프로세스가 로컬에서 생성한 private key 에 대한 CSR 만 받는다  
+`device-cert-issuer` 는 private key 를 생성하거나 반환하지 않고, CSR 을 검증한 뒤 leaf certificate / chain / fullchain 만 반환한다
+
+server certificate policy
+
+- CSR signature 를 검증한다
+- SAN 이 반드시 하나 이상 있어야 한다
+- modern TLS 검증은 SAN 을 기준으로 동작하므로 CN 만 있는 CSR 은 발급하지 않는다
+- leaf certificate 는 `CA=false`
+- `ExtKeyUsage` 는 `serverAuth`
+- RSA key 는 `digitalSignature + keyEncipherment`
+- ECDSA / Ed25519 key 는 `digitalSignature`
+
+device/client certificate issuance 와의 차이
+
+- device flow 는 device identity 정책을 적용하고 `clientAuth` 용 leaf 를 발급한다
+- server flow 는 CSR SAN 을 기준으로 server identity 정책을 적용하고 `serverAuth` 용 leaf 를 발급한다
+- 두 흐름은 endpoint 와 issuance profile 이 분리되어 있다
 
 ## File Signer 운영 가이드
 

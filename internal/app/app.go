@@ -33,9 +33,18 @@ func New(
 	queries := sqlc.New(db)
 	deviceCertificateRepository := mysql.NewDeviceCertificateRepository(queries)
 	requestValidator := service.NewRequestValidator(cfg.Issuance)
+	serverRequestValidator := service.NewServerRequestValidator()
 	enrollmentAuthorizer := service.NewStaticEnrollmentAuthorizer()
 	csrValidator := service.NewCSRValidator(cfg.Issuance)
+	serverCSRValidator := service.NewServerCSRValidator(cfg.Issuance)
 	certificateIssuer := service.NewCertificateIssuer(
+		cfg.Issuance,
+		clock.SystemClock{},
+		serial.RandomGenerator{},
+		certificateSigner,
+		deviceCertificateRepository,
+	)
+	serverCertificateIssuer := service.NewServerCertificateIssuer(
 		cfg.Issuance,
 		clock.SystemClock{},
 		serial.RandomGenerator{},
@@ -49,8 +58,14 @@ func New(
 		csrValidator,
 		certificateIssuer,
 	)
+	issueServerService := service.NewIssueServerCertificateService(
+		logger,
+		serverRequestValidator,
+		serverCSRValidator,
+		serverCertificateIssuer,
+	)
 	readinessService := service.NewReadinessService(certificateSigner, db)
-	handler := httptransport.NewHandler(issueService, readinessService)
+	handler := httptransport.NewHandler(issueService, issueServerService, readinessService)
 
 	return handler, nil
 }
